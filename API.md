@@ -1,14 +1,26 @@
 # Memorials Backend API
 
-FastAPI 服务入口：`app.py`。
+FastAPI 服务入口：`app.py`，实际后端代码位于 `backend/`。
 
 启动方式：
 
 ```bash
-uvicorn app:app --reload
+uvicorn app:app --reload --port 8000
 ```
 
-服务会读写项目根目录下的 `memorials-store.json`，返回字段对齐前端现有结构。
+服务会读写项目根目录下的 `memorials-store.json`、`users-store.json`、`friends-store.json`。
+
+除 `/health` 外，前端业务接口保留现有包装格式：
+
+```json
+{ "success": true, "data": {} }
+```
+
+失败：
+
+```json
+{ "success": false, "error": "错误信息" }
+```
 
 ## 分类转换
 
@@ -76,6 +88,67 @@ uvicorn app:app --reload
 { "status": "ok" }
 ```
 
+### POST `/api/register`
+
+注册并自动登录。
+
+请求体：
+
+```json
+{
+  "username": "alice",
+  "password": "123",
+  "displayName": "阿梨",
+  "avatarTitle": "翰林侍读"
+}
+```
+
+响应：
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {},
+    "token": "tok-..."
+  }
+}
+```
+
+### POST `/api/login`
+
+登录，响应同注册。
+
+### GET `/api/me`
+
+获取当前用户。需要 `Authorization: Bearer <token>`。
+
+### GET `/api/friends`
+
+获取好友、收到的申请、发出的申请。
+
+### GET `/api/users/search?q=关键词`
+
+搜索可添加用户。
+
+### POST `/api/friends/request`
+
+发送好友申请。
+
+请求体：
+
+```json
+{ "toUserId": "user-xxx" }
+```
+
+### POST `/api/friends/{friend_id}/accept`
+
+接受好友申请。
+
+### POST `/api/friends/{friend_id}/reject`
+
+拒绝好友申请。
+
 ### GET `/api/memorials`
 
 获取奏章列表。
@@ -87,7 +160,11 @@ Query 参数：
 | `status` | `pending`/`approved`/`rejected` | 否 | 按状态筛选。 |
 | `category` | `经略阁`/`创意坊`/`寻乐记` | 否 | 按前端分类筛选。 |
 
-响应：`Memorial[]`。
+响应：`{ success: true, data: Memorial[] }`，只返回当前用户收到的奏章。
+
+### GET `/api/memorials/sent`
+
+获取当前用户发出的奏章。
 
 ### GET `/api/memorials/{memorial_id}`
 
@@ -99,6 +176,43 @@ Query 参数：
 
 ```json
 { "detail": "未找到对应奏章。" }
+```
+
+### POST `/api/memorials`
+
+前端“粘贴文案”入口。会调用文本模型生成奏章；无模型配置时使用本地模板降级。
+
+请求体：
+
+```json
+{
+  "rawText": "https://v.douyin.com/xxxx/ 分享文案",
+  "customSender": "翰林侍读 阿梨",
+  "toUserId": "user-xxx"
+}
+```
+
+响应：
+
+```json
+{
+  "success": true,
+  "source": "ai",
+  "data": {}
+}
+```
+
+### POST `/api/memorials/from-url`
+
+前端“粘贴链接”入口。优先复用现有 Python 抖音解析 + Qwen 视频分析；失败时使用本地模板降级。
+
+请求体：
+
+```json
+{
+  "url": "https://v.douyin.com/xxxx/",
+  "toUserId": "user-xxx"
+}
 ```
 
 ### POST `/api/memorials/analyze`
@@ -127,7 +241,7 @@ Query 参数：
 | `severityLevel` | string/null | 否 | 不传使用默认值。 |
 | `entertainmentRatio` | number/null | 否 | 0 到 100；不传按 AI 分类默认生成。 |
 
-响应：`Memorial`。
+兼容调试接口，语义同 `/api/memorials/from-url`。
 
 失败：
 
@@ -135,7 +249,7 @@ Query 参数：
 { "detail": "视频解析或 AI 分析失败：错误原因" }
 ```
 
-### POST `/api/memorials`
+### POST `/api/memorials/analyzed`
 
 不调用视频解析，直接把已知分析结果转换并保存为前端奏章对象。适合调试或接入其它分析来源。
 
@@ -159,9 +273,34 @@ Query 参数：
 }
 ```
 
-响应：`Memorial`。
+不调用视频解析，直接把已知分析结果转换并保存为前端奏章对象。
 
-### PATCH `/api/memorials/{memorial_id}`
+### POST `/api/generate-comment`
+
+生成朱批。
+
+请求体：
+
+```json
+{
+  "title": "折子标题",
+  "category": "经略阁",
+  "sender": "翰林侍读 阿梨",
+  "tone": "pleased"
+}
+```
+
+响应：
+
+```json
+{
+  "success": true,
+  "source": "ai",
+  "comment": "朕..."
+}
+```
+
+### POST `/api/memorials/{memorial_id}/approve`
 
 更新状态、批注、紧急程度或娱乐指数。
 
@@ -181,4 +320,20 @@ Query 参数：
 - `status` 更新为 `approved` 时，如果还没有 `approvedTime`，后端会自动写入当前时间。
 - `status` 更新为 `pending` 或 `rejected` 时，后端会清空 `approvedTime`。
 
-响应：`Memorial`。
+保存批阅决断。
+
+### DELETE `/api/memorials/{memorial_id}`
+
+删除奏章。
+
+### POST `/api/memorials/reset`
+
+重置当前用户收到的奏章为初始化种子数据。
+
+### GET `/api/briefing`
+
+生成当前用户奏章简报。
+
+### GET `/api/profile`
+
+生成当前用户画像和批阅统计。

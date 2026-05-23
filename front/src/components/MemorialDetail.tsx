@@ -109,7 +109,7 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
       <div className="relative w-full max-w-4xl bg-[#FAF6ED] border-4 border-double border-[#A93226]/60 rounded-2xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 max-h-[90vh]">
         
         {/* Left Side: Traditional Rice-parchment Scroll */}
-        <div className="col-span-1 md:col-span-7 bg-[#FCF9F2] relative p-6 md:p-8 flex flex-col justify-between overflow-y-auto max-h-[90vh] md:max-h-none h-[50vh] md:h-auto border-b md:border-b-0 md:border-r border-[#DCD3BE]">
+        <div className="col-span-1 md:col-span-7 bg-[#FCF9F2] relative p-6 md:p-8 flex flex-col min-h-0 overflow-hidden h-[50vh] md:h-[90vh] border-b md:border-b-0 md:border-r border-[#DCD3BE]">
           
           {/* Scroll Wooden Slats Decoration on Left and Right borders */}
           <div className="absolute top-0 bottom-0 left-0 w-3 bg-gradient-to-r from-[#87251B] via-[#E4D5B9] to-[#87251B] border-r border-[#87251B]/20 shadow-md"></div>
@@ -120,61 +120,61 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
             <span className="font-serif text-[18rem] text-red-800 font-black">诏</span>
           </div>
 
-          <div className="pl-4 pr-4 space-y-5">
-            {/* Header: Courter, Severity, Category */}
-            <div className="flex flex-wrap items-center justify-start gap-2 border-b border-[#D5C6AC]/60 pb-3">
-              <span className="font-serif text-[#A93226] text-xs font-bold tracking-widest bg-[#A93226]/5 px-2.5 py-0.5 rounded border border-[#A93226]/14 select-none">
-                {replaceOldTitles(memorial.category)} 呈批
-              </span>
-            </div>
-
-            {/* Title */}
-            <div className="space-y-1">
-              <span className="text-[10px] text-[#7C6647] font-serif block">奏章标题:</span>
-              <h1 className="font-serif text-2xl font-black text-[#5C2318] leading-relaxed">
-                《{memorial.title}》
-              </h1>
-            </div>
-
-            {/* Senders */}
-            <div className="flex items-center gap-1.5 text-xs text-[#6E6357] font-serif pb-2">
-              <span className="text-[#8C7A63] font-serif font-medium">呈折爱卿：</span>
-              <strong className="text-[#A93226] font-bold">{replaceOldTitles(memorial.sender.split(' ')[0])}</strong>
-              <span className="text-[#A09384] ml-2 font-mono text-[10px]">{new Date(memorial.createdTime).toLocaleTimeString()} 递达御前</span>
-            </div>
-
-            {/* Classical Styled Translation Box */}
-            <div className="relative p-5 bg-[#FAF6ED]/80 border-l-4 border-[#A93226] rounded-r shadow-inner my-4">
-              <div className="font-serif text-xs font-bold text-[#A93226] mb-2 flex items-center gap-1">
-                <Scroll className="w-4 h-4 text-[#A93226]" /> 内阁译拟之：奏章正文 (AI总结短视频)
-              </div>
-              <p className="text-sm font-serif leading-relaxed text-[#2F2722] whitespace-pre-wrap select-text">
-                {replaceOldTitles(memorial.summary)}
-              </p>
-            </div>
-
-            {/* Tags keywords */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {memorial.keywords.map((kw, i) => (
-                <span key={i} className="px-2.5 py-0.5 text-[10px] font-serif font-bold rounded-full bg-[#EFE9DA] text-[#6E6357] border border-[#D5C6AC]/50">
-                  #{kw}
+          <div className="pl-4 pr-4 flex flex-col min-h-0 flex-1">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-5">
+              {/* Header: Courter, Severity, Category */}
+              <div className="flex flex-wrap items-center justify-start gap-2 border-b border-[#D5C6AC]/60 pb-3">
+                <span className="font-serif text-[#A93226] text-xs font-bold tracking-widest bg-[#A93226]/5 px-2.5 py-0.5 rounded border border-[#A93226]/14 select-none">
+                  {replaceOldTitles(memorial.category)} 呈批
                 </span>
-              ))}
+              </div>
+
+              {/* Title */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-[#7C6647] font-serif block">奏章标题:</span>
+                <h1 className="font-serif text-2xl font-black text-[#5C2318] leading-relaxed">
+                  《{memorial.title}》
+                </h1>
+              </div>
+
+              {/* Senders */}
+              <div className="flex items-center gap-1.5 text-xs text-[#6E6357] font-serif pb-2">
+                <span className="text-[#8C7A63] font-serif font-medium">呈折爱卿：</span>
+                <strong className="text-[#A93226] font-bold">{replaceOldTitles(memorial.sender.split(' ')[0])}</strong>
+                <span className="text-[#A09384] ml-2 font-mono text-[10px]">{new Date(memorial.createdTime).toLocaleTimeString()} 递达御前</span>
+              </div>
+
+              {/* Classical Styled Translation Box */}
+              <div className="relative p-5 bg-[#FAF6ED]/80 border-l-4 border-[#A93226] rounded-r shadow-inner my-4">
+                <div className="font-serif text-xs font-bold text-[#A93226] mb-2 flex items-center gap-1">
+                  <Scroll className="w-4 h-4 text-[#A93226]" /> 内阁译拟之：奏章正文 (AI总结短视频)
+                </div>
+                <p className="text-sm font-serif leading-relaxed text-[#2F2722] whitespace-pre-wrap select-text">
+                  {replaceOldTitles(memorial.summary)}
+                </p>
+              </div>
+
+              {/* Tags keywords */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {memorial.keywords.map((kw, i) => (
+                  <span key={i} className="px-2.5 py-0.5 text-[10px] font-serif font-bold rounded-full bg-[#EFE9DA] text-[#6E6357] border border-[#D5C6AC]/50">
+                    #{kw}
+                  </span>
+                ))}
+              </div>
+
+              {/* Original Source share */}
+              <div className="p-3 bg-[#EFE9DA]/30 rounded border border-[#D5C6AC]/30 mt-4">
+                <p className="text-[10px] text-[#7C6647] font-serif mb-1">
+                  来自市井胡同分享原文 (抖音原帖文案/原文):
+                </p>
+                <p className="text-xs text-[#5C5144] italic font-sans max-h-16 overflow-y-auto bg-white/70 p-2 rounded select-all selection:bg-amber-200">
+                  {memorial.rawText}
+                </p>
+              </div>
             </div>
 
-            {/* Original Source share */}
-            <div className="p-3 bg-[#EFE9DA]/30 rounded border border-[#D5C6AC]/30 mt-4">
-              <p className="text-[10px] text-[#7C6647] font-serif mb-1">
-                来自市井胡同分享原文 (抖音原帖文案/原文):
-              </p>
-              <p className="text-xs text-[#5C5144] italic font-sans max-h-16 overflow-y-auto bg-white/70 p-2 rounded select-all selection:bg-amber-200">
-                {memorial.rawText}
-              </p>
-            </div>
-
-          </div>
-
-          <div className="pl-4 pr-4 border-t border-[#D5C6AC]/50 pt-4 flex justify-center">
+            <div className="shrink-0 pt-4 mt-4 border-t border-[#D5C6AC]/50 flex justify-center">
             {/* Click to Watch jump button using elegant ink button styling */}
             <a
               id="watch-video-btn"
@@ -186,6 +186,7 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
               <Play className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
               御前审看抖音视频 (品鉴)
             </a>
+          </div>
           </div>
 
           {/* Authentic Hologram Stamp Seal rendering when approved or active */}

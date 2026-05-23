@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+
+def seed_memorials(now: datetime | None = None) -> list[dict[str, Any]]:
+    base = now or datetime.now(UTC)
+    return [
+        {
+            "id": "seed-1",
+            "title": "程序员大兴土木！电脑死循环发热取暖大作",
+            "url": "https://www.douyin.com",
+            "rawText": "https://v.douyin.com/xyz1/ 【搞笑】大冬天程序员如何使用超频显卡和死循环烤红薯，隔壁工科生看哭了！",
+            "sender": "工部侍郎 科技达人",
+            "category": "创意坊",
+            "summary": "工部司呈递：江宁郡一程序员，于寒冬大雪纷飞之际，写就无限递归天书数卷，引天雷入机。显卡温度飙升至九十度，烤红薯极香。极富科学研发之精神，臣请推广于全军！",
+            "keywords": ["程序员", "死循环", "烤红薯", "超频"],
+            "entertainmentRatio": 88,
+            "severityLevel": "微臣急奏",
+            "status": "pending",
+            "createdTime": (base - timedelta(hours=3)).isoformat(),
+        },
+        {
+            "id": "seed-2",
+            "title": "震惊！十五斤肥橘猫涉嫌压塌李侍郎家屋顶琉璃瓦被扣押猫粮铺",
+            "url": "https://www.douyin.com",
+            "rawText": "https://v.douyin.com/xyz2/ 橘猫以重力服人，居然压裂太傅府的琉璃瓦，已被隔壁扣留要小鱼干赎人！",
+            "sender": "刑部尚书 铁面无私",
+            "category": "寻乐记",
+            "summary": "刑部司急呈：今日正午，太傅府饲养之巨型橘猫（重达十五斤，色若黄金），因飞檐走壁时不幸重力失衡，压垮御赐五彩琉璃瓦三片。目前该猫在隔壁粮铺因索要精神赔付，已被铺主扣押。臣请动用九门兵马前往搭救！",
+            "keywords": ["橘猫", "瓦片被垮", "小鱼干", "肥猫惹祸"],
+            "entertainmentRatio": 96,
+            "severityLevel": "弹劾奏章",
+            "status": "pending",
+            "createdTime": (base - timedelta(hours=2)).isoformat(),
+        },
+        {
+            "id": "seed-3",
+            "title": "二哈拆迁办大显身手：上古神兽再度肢解御赐龙椅屏风",
+            "url": "https://www.douyin.com",
+            "rawText": "https://v.douyin.com/xyz3/ 傻二哈趁主人不在把真皮沙发拆成废布，主人气得想吃红烧哈士奇",
+            "sender": "兵部侍郎 战力观测",
+            "category": "寻乐记",
+            "summary": "兵部统领奏：番邦进贡之雪撬神兽（俗名哈士奇，又称二哈），战力极强，今日于内廷行馆，仅用半个时辰，即将皇家真皮贵妃榻以及屏风一座粉碎成棉。其势震古烁今。微臣恐其有反心，特密陈弹劾之！",
+            "keywords": ["哈士奇", "龙椅撕碎", "神兽拆迁", "红烧哈士奇"],
+            "entertainmentRatio": 92,
+            "severityLevel": "十万火急",
+            "status": "pending",
+            "createdTime": (base - timedelta(hours=1)).isoformat(),
+        },
+        {
+            "id": "seed-4",
+            "title": "两分钱自制米其林烤炉，户部极致省钱秘方",
+            "url": "https://www.douyin.com",
+            "rawText": "https://v.douyin.com/xyz4/ 捡易拉罐做成自动炖汤炉，成本两毛，炖肉极香，太省了",
+            "sender": "户部仓曹 算无遗策",
+            "category": "创意坊",
+            "summary": "户部司金奏报：今有市井奇人，用废铜废铁（废旧易拉罐）配以小柴炭，做成旋转自动炙烤炉，炖制大肉极香，造价仅二文。若推行此法，可省军伙柴炭支出八成。臣请嘉奖此人！",
+            "keywords": ["省钱神技", "易拉罐", "手工达人", "米其林"],
+            "entertainmentRatio": 78,
+            "severityLevel": "日常请安",
+            "status": "approved",
+            "imperialComment": "朕已阅。此等节俭勤恳兼具口腹之欲的奇思，深得朕心。赏该奇人废铁易拉罐十万个，任其大兴烧烤大业！",
+            "createdTime": (base - timedelta(hours=5)).isoformat(),
+            "approvedTime": (base - timedelta(hours=4, minutes=48)).isoformat(),
+        },
+    ]
+

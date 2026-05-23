@@ -4,8 +4,8 @@ Resolve a Douyin share URL, save metadata and cover, download the video, then
 send the video to Qwen video understanding and save the AI JSON result.
 
 Usage:
-  python process_douyin_video_with_ai.py "https://v.douyin.com/xxxx/"
-  python process_douyin_video_with_ai.py "复制出来的一整段分享文案，里面只要包含链接即可" -o outputs
+  python -m backend.video.process_douyin_video_with_ai "https://v.douyin.com/xxxx/"
+  python -m backend.video.process_douyin_video_with_ai "复制出来的一整段分享文案，里面只要包含链接即可" -o outputs
 
 Required .env:
   DASHSCOPE_API_KEY=your_api_key
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from douyin_video_assets import (
+from .douyin_video_assets import (
     DouyinDownloadError,
     build_metadata,
     choose_cover_url,
@@ -38,7 +38,7 @@ from douyin_video_assets import (
     safe_filename,
     save_metadata,
 )
-from qwen_video_analysis import analyze_video, configure_logging, get_api_key, save_json
+from .qwen_video_analysis import analyze_video, configure_logging, get_api_key, save_json
 
 
 DEFAULT_OUTPUT_DIR = Path("outputs")

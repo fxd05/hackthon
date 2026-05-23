@@ -1,0 +1,18 @@
+[
+  {
+    "id": "user-1779556911921",
+    "username": "111",
+    "passwordHash": "pbkdf2_sha256$120000$wX1QYNmAmFOQWsZmzbjapA==$sCFn+SUi5Jmwpr5JeqEKjZU+gV3LMfz5rrCjqd6/5yg=",
+    "displayName": "小冰",
+    "avatarTitle": "aaa",
+    "createdAt": "2026-05-23T17:21:52Z"
+  },
+  {
+    "id": "user-1779559334779",
+    "username": "222",
+    "passwordHash": "pbkdf2_sha256$120000$m2xnYab2ZCPt2LSrKfdWFw==$FD249LSQvDKCS4JFf5z1MvksH0YrzsqTm/befiFecS4=",
+    "displayName": "abab",
+    "avatarTitle": "cdcd",
+    "createdAt": "2026-05-23T18:02:14Z"
+  }
+]

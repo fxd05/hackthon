@@ -33,7 +33,7 @@ export default function Dashboard() {
 
   const [memorials, setMemorials] = useState<Memorial[]>([]);
   const [sentMemorials, setSentMemorials] = useState<Memorial[]>([]);
-  const [activeTab, setActiveTab] = useState<'desk' | 'sent' | 'briefing'>('desk');
+  const [activeTab, setActiveTab] = useState<'desk' | 'approved' | 'sent' | 'briefing'>('desk');
   const [selectedCategory, setSelectedCategory] = useState<string>('全部');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -144,6 +144,8 @@ export default function Dashboard() {
   const pendingCount = memorials.filter(m => m.status === 'pending').length;
   const approvedCount = memorials.filter(m => m.status === 'approved').length;
   const diligenceIndex = totalDecrees > 0 ? Math.round((approvedCount / totalDecrees) * 100) : 100;
+  const pendingMemorials = memorials.filter(m => m.status === 'pending');
+  const approvedMemorials = memorials.filter(m => m.status === 'approved');
 
   const getEmperorRankStr = (index: number) => {
     if (totalDecrees === 0) return "清静无为 · 万民升平安康";
@@ -154,7 +156,7 @@ export default function Dashboard() {
     return "逍遥天子 · 奏章深压垂帘罢朝";
   };
 
-  const filteredMemorials = memorials.filter(m => {
+  const filterMemorials = (rows: Memorial[]) => rows.filter(m => {
     const matchesCategory = selectedCategory === '全部' || m.category === selectedCategory;
     const matchesSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           m.sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -162,7 +164,13 @@ export default function Dashboard() {
     return matchesCategory && matchesSearch;
   });
 
-  const displayList = activeTab === 'sent' ? sentMemorials : filteredMemorials;
+  const displayList =
+    activeTab === 'desk'
+      ? filterMemorials(pendingMemorials)
+      : activeTab === 'approved'
+        ? filterMemorials(approvedMemorials)
+        : sentMemorials;
+  const isFilterableTab = activeTab === 'desk' || activeTab === 'approved';
 
   return (
     <div className="min-h-screen bg-[#FAF6ED] text-[#2F2722] flex flex-col font-sans select-none pb-12 relative overflow-hidden">
@@ -286,22 +294,28 @@ export default function Dashboard() {
           </div>
 
           {/* Tab switcher */}
-          <div className="flex bg-[#FAF6ED] p-1 rounded-lg border border-[#DCD3BE] gap-1 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 bg-[#FAF6ED] p-1 rounded-lg border border-[#DCD3BE] gap-1 mb-6">
             <button
               onClick={() => setActiveTab('desk')}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'desk' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
+              className={`py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'desk' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
             >
               <Scroll className="w-3.5 h-3.5" /> 御案待批 ({pendingCount})
             </button>
             <button
+              onClick={() => setActiveTab('approved')}
+              className={`py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'approved' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
+            >
+              <CheckCircle className="w-3.5 h-3.5" /> 已批御案 ({approvedCount})
+            </button>
+            <button
               onClick={() => setActiveTab('sent')}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'sent' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
+              className={`py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'sent' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
             >
               <Send className="w-3.5 h-3.5" /> 已发折件
             </button>
             <button
               onClick={() => setActiveTab('briefing')}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'briefing' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
+              className={`py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'briefing' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
             >
               <Sparkles className="w-3.5 h-3.5" /> 内阁简报
             </button>
@@ -312,8 +326,8 @@ export default function Dashboard() {
             <BriefingView onSelectMemorial={(m) => setSelectedMemorial(m)} memorials={memorials} />
           ) : (
             <div className="space-y-6">
-              {/* Filter controls - only for desk tab */}
-              {activeTab === 'desk' && (
+              {/* Filter controls - for pending and approved tabs */}
+              {isFilterableTab && (
                 <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-gradient-to-b from-[#FAF6ED] to-[#F5ECD7] p-4 rounded-xl border border-[#DCD3BE] shadow-xs">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-[#6E6357] font-serif mr-1 flex items-center gap-1">
@@ -346,7 +360,7 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Sent tab header */}
+
               {activeTab === 'sent' && (
                 <div className="p-4 bg-gradient-to-b from-[#FAF6ED] to-[#F5ECD7] rounded-xl border border-[#DCD3BE] shadow-xs text-center">
                   <p className="text-xs font-serif text-[#7C6647]">以下为您呈递给好友的奏折记录，静候对方御笔裁夺。</p>
@@ -370,10 +384,14 @@ export default function Dashboard() {
                 <div className="text-center py-16 bg-[#FAF6ED]/50 rounded-xl border border-dashed border-[#DCD3BE]">
                   <Scroll className="w-12 h-12 text-[#C2B095] mb-2 mx-auto opacity-35" />
                   <p className="font-serif text-[#A93226] text-sm font-bold">
-                    {activeTab === 'sent' ? '尚未递出任何折件' : '阁案空无其折'}
+                    {activeTab === 'sent' ? '尚未递出任何折件' : activeTab === 'approved' ? '暂无已批御案' : '阁案空无其折'}
                   </p>
                   <p className="text-[#7C6347] text-[10px] mt-1">
-                    {activeTab === 'sent' ? '点击「呈递新折」给好友发送一份趣味奏章吧。' : '当前无可批阅之奏件，皇帝陛下。'}
+                    {activeTab === 'sent'
+                      ? '点击「呈递新折」给好友发送一份趣味奏章吧。'
+                      : activeTab === 'approved'
+                        ? '尚无已批之折入库，先去御案待批中钤盖几封吧。'
+                        : '当前无可批阅之奏件，皇帝陛下。'}
                   </p>
                 </div>
               ) : (
@@ -381,6 +399,7 @@ export default function Dashboard() {
                   <AnimatePresence>
                     {displayList.map((m) => {
                       const isPending = m.status === 'pending';
+                      const isApprovedTab = activeTab === 'approved';
                       const isSentTab = activeTab === 'sent';
                       return (
                         <motion.div
@@ -390,15 +409,17 @@ export default function Dashboard() {
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.97 }}
                           whileHover={{ y: -5, scale: 1.01, transition: { duration: 0.15 } }}
-                          onClick={() => !isSentTab && setSelectedMemorial(m)}
+                          onClick={() => (!isSentTab ? setSelectedMemorial(m) : undefined)}
                           className={`${isSentTab ? '' : 'cursor-pointer'} overflow-hidden border border-t-2 border-b-2 rounded-xl flex flex-col justify-between min-h-[17.5rem] h-auto transition-all relative w-full max-w-[26rem] mx-auto ${
                             isPending
                               ? 'bg-gradient-to-br from-[#FCFAF5] to-[#FDFBF7] border-t-[#A93226] border-b-[#C2B095]/40 border-x-[#C2B095]/60 shadow-[0_4px_12px_rgba(194,176,149,0.1)] hover:shadow-[0_12px_24px_rgba(169,50,38,0.12)]'
-                              : 'bg-gradient-to-br from-[#FAF6ED]/95 to-[#FBF8F0]/95 border-t-[#5C4F43] border-b-[#DCD3BE]/45 border-x-[#DCD3BE]/60 opacity-95 hover:opacity-100 shadow-[0_3px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_10px_22px_rgba(92,79,67,0.09)]'
+                              : isApprovedTab
+                                ? 'bg-gradient-to-br from-[#EFF6F1]/95 to-[#F6FBF7]/95 border-t-[#2E5C50] border-b-[#DCD3BE]/45 border-x-[#DCD3BE]/60 opacity-95 hover:opacity-100 shadow-[0_3px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_10px_22px_rgba(46,92,80,0.09)]'
+                                : 'bg-gradient-to-br from-[#FAF6ED]/95 to-[#FBF8F0]/95 border-t-[#5C4F43] border-b-[#DCD3BE]/45 border-x-[#DCD3BE]/60 opacity-95 hover:opacity-100 shadow-[0_3px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_10px_22px_rgba(92,79,67,0.09)]'
                           }`}
                         >
                           <div className={`absolute left-0 top-3 bottom-3 w-1.5 rounded-full bg-gradient-to-b ${
-                            isPending ? 'from-transparent via-[#A93226] to-transparent' : 'from-transparent via-[#5C4F43] to-transparent'
+                            isPending ? 'from-transparent via-[#A93226] to-transparent' : isApprovedTab ? 'from-transparent via-[#2E5C50] to-transparent' : 'from-transparent via-[#5C4F43] to-transparent'
                           }`} />
                           <div className="absolute top-0 right-0 w-16 h-16 opacity-[1.5%] pointer-events-none text-[#A93226] text-5xl font-serif select-none p-2">密</div>
 

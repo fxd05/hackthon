@@ -1,20 +1,34 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# 前端说明
 
-# Run and deploy your AI Studio app
+本目录是批阅奏折项目的前端，使用 React、TypeScript、Vite 和 Tailwind CSS 构建。
 
-This contains everything you need to run your app locally.
+## 运行
 
-View your app in AI Studio: https://ai.studio/apps/10a05bd2-819b-4dda-b64e-99068249f35d
+```bash
+npm install
+npm run dev
+```
 
-## Run Locally
+默认开发地址为 `http://localhost:3000`。
 
-**Prerequisites:**  Node.js
+## 功能
 
+- 登录和注册
+- 奏折列表、筛选、搜索
+- 御案待批、已批御案、已发折件、内阁简报
+- 奏折详情批阅与盖章
+- 新奏折提交
+- 好友面板与个人面板
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 代理
+
+Vite 会把这些请求代理到后端：
+
+- `/api`
+- `/health`
+
+后端默认地址是 `http://127.0.0.1:8000`。
+
+## 说明
+
+前端使用本地 token 作为登录态，存储键为 `imperial-token`。
