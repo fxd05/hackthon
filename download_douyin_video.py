@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 """
-Download a Douyin video from a short link or share/video URL.
+Resolve a Douyin share/video URL and save its video URL plus metadata.
 
 Usage:
   python download_douyin_video.py "https://v.douyin.com/xxxx/"
-  python download_douyin_video.py "复制出来的一整段分享文案，里面只要包含链接即可" -o downloads
+  python download_douyin_video.py "复制出来的一整段分享文案，里面只要包含链接即可" -o outputs
+  python download_douyin_video.py -url "https://v.douyin.com/xxxx/" --download
 """
 
 from __future__ import annotations
@@ -171,6 +172,208 @@ def get_video_urls(item: dict[str, Any]) -> list[str]:
     return unique_urls(urls)
 
 
+def first_url(value: Any) -> str | None:
+    if isinstance(value, str) and value.startswith("http"):
+        return value
+    if isinstance(value, dict):
+        return first_url(value.get("url_list"))
+    if isinstance(value, list):
+        for item in value:
+            url = first_url(item)
+            if url:
+                return url
+    return None
+
+
+def compact(value: Any) -> Any:
+    if isinstance(value, dict):
+        result = {}
+        for key, child in value.items():
+            cleaned = compact(child)
+            if cleaned not in (None, "", [], {}):
+                result[key] = cleaned
+        return result
+    if isinstance(value, list):
+        return [cleaned for item in value if (cleaned := compact(item)) not in (None, "", [], {})]
+    return value
+
+
+def simplify_author(author: dict[str, Any]) -> dict[str, Any]:
+    return compact(
+        {
+            "uid": author.get("uid"),
+            "sec_uid": author.get("sec_uid"),
+            "short_id": author.get("short_id"),
+            "unique_id": author.get("unique_id"),
+            "nickname": author.get("nickname"),
+            "signature": author.get("signature"),
+            "avatar": first_url(author.get("avatar_thumb") or author.get("avatar_medium") or author.get("avatar_larger")),
+        }
+    )
+
+
+def simplify_text_extra(items: list[Any]) -> list[dict[str, Any]]:
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            compact(
+                {
+                    "hashtag_name": item.get("hashtag_name"),
+                    "cid": item.get("cid"),
+                    "type": item.get("type"),
+                    "start": item.get("start"),
+                    "end": item.get("end"),
+                    "user_id": item.get("user_id"),
+                    "sec_uid": item.get("sec_uid"),
+                }
+            )
+        )
+    return compact(result)
+
+
+def extract_hashtags(item: dict[str, Any]) -> list[str]:
+    tags: list[str] = []
+    for extra in item.get("text_extra") or []:
+        if isinstance(extra, dict):
+            tag = extra.get("hashtag_name")
+            if tag:
+                tags.append(str(tag))
+    for challenge in item.get("cha_list") or []:
+        if isinstance(challenge, dict):
+            tag = challenge.get("cha_name") or challenge.get("hashtag_name")
+            if tag:
+                tags.append(str(tag))
+    return list(dict.fromkeys(tags))
+
+
+def simplify_challenges(items: list[Any]) -> list[dict[str, Any]]:
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            compact(
+                {
+                    "cid": item.get("cid"),
+                    "cha_name": item.get("cha_name"),
+                    "desc": item.get("desc"),
+                    "user_count": item.get("user_count"),
+                    "view_count": item.get("view_count"),
+                }
+            )
+        )
+    return compact(result)
+
+
+def simplify_anchors(items: list[Any]) -> list[dict[str, Any]]:
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            compact(
+                {
+                    "id": item.get("id"),
+                    "type": item.get("type"),
+                    "title": item.get("title"),
+                    "keyword": item.get("keyword"),
+                    "description": item.get("description"),
+                    "extra": item.get("extra"),
+                }
+            )
+        )
+    return compact(result)
+
+
+def simplify_music(music: dict[str, Any]) -> dict[str, Any]:
+    return compact(
+        {
+            "id": music.get("id"),
+            "mid": music.get("mid"),
+            "title": music.get("title"),
+            "author": music.get("author"),
+            "album": music.get("album"),
+            "duration": music.get("duration"),
+            "cover": first_url(music.get("cover_thumb") or music.get("cover_medium") or music.get("cover_large")),
+            "play_url": first_url(music.get("play_url")),
+        }
+    )
+
+
+def simplify_video(video: dict[str, Any]) -> dict[str, Any]:
+    return compact(
+        {
+            "duration_ms": video.get("duration"),
+            "width": video.get("width"),
+            "height": video.get("height"),
+            "ratio": video.get("ratio"),
+            "format": video.get("format"),
+            "cover": first_url(video.get("cover")),
+            "origin_cover": first_url(video.get("origin_cover")),
+            "dynamic_cover": first_url(video.get("dynamic_cover")),
+        }
+    )
+
+
+def parse_page_meta(page: str) -> dict[str, str]:
+    meta: dict[str, str] = {}
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", page, re.I | re.S)
+    if title_match:
+        meta["title"] = html.unescape(re.sub(r"\s+", " ", title_match.group(1)).strip())
+
+    for match in re.finditer(r"<meta\b[^>]*>", page, re.I):
+        tag = match.group(0)
+        attrs = {
+            key.lower(): html.unescape(value)
+            for key, _, value in re.findall(r"([:\w-]+)\s*=\s*([\"'])(.*?)\2", tag, re.S)
+        }
+        key = attrs.get("name") or attrs.get("property")
+        content = attrs.get("content")
+        if key and content:
+            meta[key] = content
+    return meta
+
+
+def build_metadata(
+    *,
+    aweme_id: str,
+    source_url: str,
+    share_url: str,
+    page: str,
+    item: dict[str, Any],
+    urls: list[str],
+) -> dict[str, Any]:
+    page_meta = parse_page_meta(page)
+    keywords = [
+        keyword.strip()
+        for keyword in re.split(r"[,，]", page_meta.get("keywords", ""))
+        if keyword.strip()
+    ]
+    metadata = {
+        "aweme_id": aweme_id,
+        "source_url": source_url,
+        "share_url": share_url,
+        "video_url": urls[0],
+        "video_urls": urls,
+        "desc": item.get("desc"),
+        "hashtags": extract_hashtags(item),
+        "page_keywords": keywords,
+        "author": simplify_author(item.get("author") or {}),
+        "statistics": item.get("statistics") or {},
+        "video": simplify_video(item.get("video") or {}),
+        "music": simplify_music(item.get("music") or {}),
+        "text_extra": simplify_text_extra(item.get("text_extra") or []),
+        "challenges": simplify_challenges(item.get("cha_list") or []),
+        "anchors": simplify_anchors(item.get("anchors") or []),
+        "share_info": compact(item.get("share_info") or {}),
+        "page_meta": page_meta,
+        "create_time": item.get("create_time"),
+    }
+    return compact(metadata)
+
+
 def safe_filename(text: str, fallback: str) -> str:
     text = re.sub(r"[\\/:*?\"<>|\r\n\t]+", "_", text).strip(" ._")
     text = re.sub(r"\s+", " ", text)
@@ -278,38 +481,41 @@ def run(args: argparse.Namespace) -> Path:
     duration_ms = (item.get("video") or {}).get("duration")
     basename = safe_filename(f"{aweme_id}_{desc}", f"douyin_{aweme_id}")
     output_dir = Path(args.output_dir)
-    target = output_dir / f"{basename}.mp4"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path = output_dir / f"{basename}.json"
+    video_path = output_dir / f"{basename}.mp4"
+    metadata = build_metadata(
+        aweme_id=aweme_id,
+        source_url=source_url,
+        share_url=share_url,
+        page=page,
+        item=item,
+        urls=urls,
+    )
 
     print(f"标题：{desc}")
     if author:
         print(f"作者：{author}")
     if duration_ms:
         print(f"时长：{duration_ms / 1000:.1f} 秒")
-    print(f"输出：{target}")
-    if args.info_only:
+    print(f"video_url：{urls[0]}")
+    print(f"JSON 输出：{metadata_path}")
+
+    if args.metadata:
+        save_metadata(metadata_path, metadata)
+
+    if not args.download:
         print(f"可用视频地址数：{len(urls)}")
-        for index, video_url in enumerate(urls, start=1):
-            print(f"[{index}] {video_url}")
-        return target
+        if args.print_urls:
+            for index, video_url in enumerate(urls, start=1):
+                print(f"[{index}] {video_url}")
+        return metadata_path
 
     last_error: Exception | None = None
     for index, video_url in enumerate(urls, start=1):
         try:
             print(f"尝试下载地址 {index}/{len(urls)}")
-            result = download_file(opener, video_url, target, referer=share_url, overwrite=args.overwrite)
-            if args.metadata:
-                save_metadata(
-                    target.with_suffix(".json"),
-                    {
-                        "aweme_id": aweme_id,
-                        "source_url": source_url,
-                        "share_url": share_url,
-                        "desc": desc,
-                        "author": author,
-                        "duration_ms": duration_ms,
-                        "video_url": video_url,
-                    },
-                )
+            result = download_file(opener, video_url, video_path, referer=share_url, overwrite=args.overwrite)
             return result
         except Exception as exc:
             last_error = exc
@@ -319,12 +525,13 @@ def run(args: argparse.Namespace) -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="下载抖音分享链接中的视频到本地。")
+    parser = argparse.ArgumentParser(description="解析抖音分享链接，保存 video_url 和视频元数据。")
     parser.add_argument("-url", default=None, help="抖音短链、分享页链接，或包含链接的整段分享文案")
-    parser.add_argument("-o", "--output-dir", default="downloads", help="输出目录，默认 downloads")
+    parser.add_argument("-o", "--output-dir", default="outputs", help="输出目录，默认 outputs")
+    parser.add_argument("--download", action="store_true", help="额外下载视频文件到本地")
     parser.add_argument("--overwrite", action="store_true", help="覆盖已存在文件")
-    parser.add_argument("--no-metadata", dest="metadata", action="store_false", help="不保存同名 JSON 元数据")
-    parser.add_argument("--info-only", action="store_true", help="只解析并打印视频信息，不下载文件")
+    parser.add_argument("--no-metadata", dest="metadata", action="store_false", help="不保存 JSON 元数据，只打印解析结果")
+    parser.add_argument("--print-urls", action="store_true", help="打印全部候选视频地址")
     parser.set_defaults(metadata=True)
     return parser
 
@@ -332,13 +539,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    args.url = "0.07 I@I.VL yTY:/ :4pm 06/05 100万美元一晚的六星级酒店 从1美元一晚的酒店房间一直到100万美元一晚的体验有多大区别# 野兽先生 # mrbeast # 豪华酒店体验  https://v.douyin.com/YesytGqS-YU/ 复制此链接，打开Dou音搜索，直接观看视频！"
+
+    args.url = "4.12 复制打开抖音，看看【HIGUY官方旗舰店的作品】不是哥们 黑色肌理感短袖就是爽啊! # 夏季新款 ... https://v.douyin.com/fUxmwgzKZtM/ W@m.DH zGv:/ :7pm 04/28 "
+    if not args.url:
+        parser.error("请传入抖音短链、分享页链接，或包含链接的整段分享文案。")
     try:
         path = run(args)
-        if args.info_only:
-            print("解析完成，未下载文件。")
-        else:
+        if args.download:
             print(f"下载完成：{path.resolve()}")
+        else:
+            print(f"解析完成：{path.resolve()}")
         return 0
     except DouyinDownloadError as exc:
         print(f"错误：{exc}", file=sys.stderr)
