@@ -34,8 +34,8 @@ PROMPT = """
 字段约束：
 1. summary：中文，约150字，概括视频主要内容,至少100字，不得过少。
 2. tags：3~5个中文标签。
-3. category：只能是 "干货类" 或 "抽象类"。
-4. visual_summary：只有 category 为 "干货类" 时才有值，值为数组；如果 category 为 "抽象类"，必须为 null。
+3. category：只能是 "干货类"、"创意类" 或 "抽象类"。
+4. visual_summary：只有 category 为 "干货类" 时才有值，值为数组；如果 category 为 "创意类" 或 "抽象类"，必须为 null。
 5. visual_summary 数组中的每一项：
    - text：关键步骤或知识点的文字说明，20~50字。
    - timestamp：视频中对应内容出现的时间，优先使用 HH:MM:SS 格式。
@@ -156,12 +156,12 @@ def validate_result(data: Any) -> dict[str, Any]:
         if not isinstance(tag, str):
             raise VideoAnalysisError("每个 tag 必须是字符串。")
 
-    if category not in {"干货类", "抽象类"}:
-        raise VideoAnalysisError('category 只能是 "干货类" 或 "抽象类"。')
+    if category not in {"干货类", "创意类", "抽象类"}:
+        raise VideoAnalysisError('category 只能是 "干货类"、"创意类" 或 "抽象类"。')
 
-    if category == "抽象类":
+    if category in {"创意类", "抽象类"}:
         if visual_summary is not None:
-            raise VideoAnalysisError('category 为 "抽象类" 时 visual_summary 必须为 null。')
+            raise VideoAnalysisError('category 为 "创意类" 或 "抽象类" 时 visual_summary 必须为 null。')
     else:
         if not isinstance(visual_summary, list) or len(visual_summary) == 0:
             raise VideoAnalysisError('category 为 "干货类" 时 visual_summary 必须是非空数组。')

@@ -1,0 +1,4 @@
+dashscope
+fastapi
+python-dotenv
+uvicorn[standard]
