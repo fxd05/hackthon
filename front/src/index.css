@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Noto Serif SC", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom Classical Theme Palette & Aesthetics */
+body {
+  background-color: #FAF6ED;
+  background-image: 
+    radial-gradient(ellipse at 50% 50%, rgba(213, 198, 172, 0.15) 0%, transparent 80%),
+    repeating-linear-gradient(45deg, rgba(213, 198, 172, 0.05) 0px, rgba(213, 198, 172, 0.05) 1px, transparent 1px, transparent 10px);
+  color: #2F2722;
+}
+
+/* Traditional Chinese classical scroll bar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF6ED;
+  border-left: 1px solid #E6DEC9;
+}
+::-webkit-scrollbar-thumb {
+  background: #A93226;
+  border: 2px solid #FAF6ED;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #87251B;
+}
+
+/* Classical double line borders simulating ancient Chinese prints */
+.double-border {
+  border: 4px double #C2B095;
+}
+
+.stamp-effect {
+  position: relative;
+  font-family: var(--font-serif);
+  border: 2px solid #A93226;
+  color: #A93226;
+  background: rgba(169, 50, 38, 0.05);
+  box-shadow: 0 0 0 1px rgba(169, 50, 38, 0.1), inset 0 0 0 1px rgba(169, 50, 38, 0.1);
+  transform: rotate(-3deg);
+  display: inline-block;
+}
+
+/* Texture overlay for papers etc */
+.paper-texture {
+  background-color: #FCFAF5;
+  background-image: radial-gradient(circle at 100% 150%, #FCFAF5 24%, #FAF5EA 24%, #FAF5EA 28%, #FCFAF5 28%, #FCFAF5);
+  background-size: 20px 20px;
+}

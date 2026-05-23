@@ -1,0 +1,6 @@
+{
+  "name": "批阅奏折 - 抖音短视频脑洞简报",
+  "description": "基于抖音短视频分享，专为好朋友和自留视频打造的皇宫御书房批阅奏折模拟器。支持Gemini大模型对搞笑/学习视频进行自动分类与奏章汇编，并通过御笔批示分享您的皇帝搞笑评语。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
