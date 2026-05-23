@@ -1,34 +1,16 @@
-#!/usr/bin/env python
-"""
-Resolve a Douyin share/video URL and save its video URL plus metadata.
-
-Usage:
-  python download_douyin_video.py "https://v.douyin.com/xxxx/"
-  python download_douyin_video.py "复制出来的一整段分享文案，里面只要包含链接即可" -o outputs
-  python download_douyin_video.py -url "https://v.douyin.com/xxxx/" --download
-"""
-
 from __future__ import annotations
 
-import argparse
 import html
 import json
 import mimetypes
-import os
 import re
-import sys
 import time
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import (
-    HTTPCookieProcessor,
-    HTTPRedirectHandler,
-    Request,
-    build_opener,
-)
+from urllib.request import HTTPCookieProcessor, HTTPRedirectHandler, Request, build_opener
 
 
 MOBILE_UA = (
@@ -60,7 +42,14 @@ def make_opener():
     return build_opener(HTTPCookieProcessor(CookieJar()), TrackingRedirectHandler())
 
 
-def request_url(opener, url: str, *, referer: str | None = None, headers: dict[str, str] | None = None, timeout: int = 30):
+def request_url(
+    opener,
+    url: str,
+    *,
+    referer: str | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: int = 30,
+):
     merged = dict(DEFAULT_HEADERS)
     if referer:
         merged["Referer"] = referer
@@ -249,6 +238,18 @@ def extract_hashtags(item: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(tags))
 
 
+def clean_title(desc: str, hashtags: list[str]) -> str:
+    title = desc or ""
+    for tag in sorted(hashtags, key=len, reverse=True):
+        escaped = re.escape(tag)
+        title = re.sub(rf"(?<!\S)#\s*{escaped}(?=\s|#|$)", " ", title, flags=re.I)
+        title = re.sub(rf"#\s*{escaped}(?=\s|#|$)", " ", title, flags=re.I)
+
+    title = re.sub(r"#\S+", " ", title)
+    title = re.sub(r"\s+", " ", title).strip(" -_，,。；;：:")
+    return title or desc
+
+
 def simplify_challenges(items: list[Any]) -> list[dict[str, Any]]:
     result = []
     for item in items:
@@ -352,14 +353,17 @@ def build_metadata(
         for keyword in re.split(r"[,，]", page_meta.get("keywords", ""))
         if keyword.strip()
     ]
+    hashtags = extract_hashtags(item)
+    desc = item.get("desc") or ""
     metadata = {
         "aweme_id": aweme_id,
         "source_url": source_url,
         "share_url": share_url,
         "video_url": urls[0],
         "video_urls": urls,
-        "desc": item.get("desc"),
-        "hashtags": extract_hashtags(item),
+        "title": clean_title(desc, hashtags),
+        "desc": desc,
+        "hashtags": hashtags,
         "page_keywords": keywords,
         "author": simplify_author(item.get("author") or {}),
         "statistics": item.get("statistics") or {},
@@ -508,113 +512,3 @@ def download_file(
 
 def save_metadata(path: Path, metadata: dict[str, Any]) -> None:
     path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def run(args: argparse.Namespace) -> Path:
-    opener = make_opener()
-    aweme_id, source_url = resolve_aweme_id(opener, args.url)
-    print(f"视频 ID：{aweme_id}")
-
-    page, share_url = fetch_share_page(opener, aweme_id)
-    data = parse_router_data(page)
-    item = find_aweme_item(data, aweme_id)
-    urls = get_video_urls(item)
-    if not urls:
-        raise DouyinDownloadError("没有在页面数据中找到可下载的视频地址。")
-
-    desc = item.get("desc") or aweme_id
-    author = ((item.get("author") or {}).get("nickname")) or ""
-    duration_ms = (item.get("video") or {}).get("duration")
-    basename = safe_filename(f"{aweme_id}_{desc}", f"douyin_{aweme_id}")
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    metadata_path = output_dir / f"{basename}.json"
-    cover_base_path = output_dir / f"{basename}_cover"
-    video_path = output_dir / f"{basename}.mp4"
-    metadata = build_metadata(
-        aweme_id=aweme_id,
-        source_url=source_url,
-        share_url=share_url,
-        page=page,
-        item=item,
-        urls=urls,
-    )
-
-    print(f"标题：{desc}")
-    if author:
-        print(f"作者：{author}")
-    if duration_ms:
-        print(f"时长：{duration_ms / 1000:.1f} 秒")
-    print(f"video_url：{urls[0]}")
-    cover_url = choose_cover_url(metadata)
-    if cover_url and args.cover:
-        try:
-            cover_path = download_cover_image(opener, cover_url, cover_base_path, referer=share_url)
-            metadata["cover_url"] = cover_url
-            metadata["cover_path"] = str(cover_path)
-            print(f"封面图：{cover_path}")
-        except DouyinDownloadError as exc:
-            metadata["cover_url"] = cover_url
-            metadata["cover_error"] = str(exc)
-            print(f"封面图保存失败：{exc}")
-    elif cover_url:
-        metadata["cover_url"] = cover_url
-    print(f"JSON 输出：{metadata_path}")
-
-    if args.metadata:
-        save_metadata(metadata_path, metadata)
-
-    if not args.download:
-        print(f"可用视频地址数：{len(urls)}")
-        if args.print_urls:
-            for index, video_url in enumerate(urls, start=1):
-                print(f"[{index}] {video_url}")
-        return metadata_path
-
-    last_error: Exception | None = None
-    for index, video_url in enumerate(urls, start=1):
-        try:
-            print(f"尝试下载地址 {index}/{len(urls)}")
-            result = download_file(opener, video_url, video_path, referer=share_url, overwrite=args.overwrite)
-            return result
-        except Exception as exc:
-            last_error = exc
-            print(f"这个地址失败：{exc}")
-
-    raise DouyinDownloadError(f"所有视频地址都下载失败。最后错误：{last_error}")
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="解析抖音分享链接，保存 video_url 和视频元数据。")
-    parser.add_argument("input", nargs="?", help="抖音短链、分享页链接，或包含链接的整段分享文案")
-    parser.add_argument("-url", default=None, help="抖音短链、分享页链接，或包含链接的整段分享文案")
-    parser.add_argument("-o", "--output-dir", default="outputs", help="输出目录，默认 outputs")
-    parser.add_argument("--no-cover", dest="cover", action="store_false", help="不下载封面图，只在 JSON 中保留封面 URL")
-    parser.add_argument("--download", action="store_true", help="额外下载视频文件到本地")
-    parser.add_argument("--overwrite", action="store_true", help="覆盖已存在文件")
-    parser.add_argument("--no-metadata", dest="metadata", action="store_false", help="不保存 JSON 元数据，只打印解析结果")
-    parser.add_argument("--print-urls", action="store_true", help="打印全部候选视频地址")
-    parser.set_defaults(cover=True, metadata=True)
-    return parser
-
-
-def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
-    args.url = args.url or args.input
-    if not args.url:
-        parser.error("请传入抖音短链、分享页链接，或包含链接的整段分享文案。")
-    try:
-        path = run(args)
-        if args.download:
-            print(f"下载完成：{path.resolve()}")
-        else:
-            print(f"解析完成：{path.resolve()}")
-        return 0
-    except DouyinDownloadError as exc:
-        print(f"错误：{exc}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
