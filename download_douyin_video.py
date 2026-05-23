@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import mimetypes
 import os
 import re
 import sys
@@ -374,10 +375,55 @@ def build_metadata(
     return compact(metadata)
 
 
+def choose_cover_url(metadata: dict[str, Any]) -> str | None:
+    video = metadata.get("video") or {}
+    page_meta = metadata.get("page_meta") or {}
+    for value in (
+        video.get("cover"),
+        video.get("origin_cover"),
+        video.get("dynamic_cover"),
+        page_meta.get("og:image"),
+        page_meta.get("twitter:image"),
+    ):
+        if isinstance(value, str) and value.startswith("http"):
+            return value
+    return None
+
+
 def safe_filename(text: str, fallback: str) -> str:
     text = re.sub(r"[\\/:*?\"<>|\r\n\t]+", "_", text).strip(" ._")
     text = re.sub(r"\s+", " ", text)
     return (text[:80] or fallback).strip()
+
+
+def extension_from_response(url: str, content_type: str | None) -> str:
+    if content_type:
+        media_type = content_type.split(";", 1)[0].strip().lower()
+        extension = mimetypes.guess_extension(media_type)
+        if extension:
+            return ".jpg" if extension == ".jpe" else extension
+
+    suffix = Path(urlparse(url).path).suffix.lower()
+    if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        return suffix
+    return ".jpg"
+
+
+def download_cover_image(opener, url: str, target_without_suffix: Path, *, referer: str | None) -> Path:
+    headers = {"Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"}
+    try:
+        with request_url(opener, url, referer=referer, headers=headers, timeout=30) as resp:
+            content = resp.read()
+            if not content:
+                raise DouyinDownloadError("封面图片响应为空。")
+            extension = extension_from_response(url, resp.headers.get("Content-Type"))
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise DouyinDownloadError(f"封面图片下载失败：{exc}") from exc
+
+    target = target_without_suffix.with_suffix(extension)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+    return target
 
 
 def content_length_from_head(opener, url: str, referer: str | None) -> int | None:
@@ -483,6 +529,7 @@ def run(args: argparse.Namespace) -> Path:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     metadata_path = output_dir / f"{basename}.json"
+    cover_base_path = output_dir / f"{basename}_cover"
     video_path = output_dir / f"{basename}.mp4"
     metadata = build_metadata(
         aweme_id=aweme_id,
@@ -499,6 +546,19 @@ def run(args: argparse.Namespace) -> Path:
     if duration_ms:
         print(f"时长：{duration_ms / 1000:.1f} 秒")
     print(f"video_url：{urls[0]}")
+    cover_url = choose_cover_url(metadata)
+    if cover_url and args.cover:
+        try:
+            cover_path = download_cover_image(opener, cover_url, cover_base_path, referer=share_url)
+            metadata["cover_url"] = cover_url
+            metadata["cover_path"] = str(cover_path)
+            print(f"封面图：{cover_path}")
+        except DouyinDownloadError as exc:
+            metadata["cover_url"] = cover_url
+            metadata["cover_error"] = str(exc)
+            print(f"封面图保存失败：{exc}")
+    elif cover_url:
+        metadata["cover_url"] = cover_url
     print(f"JSON 输出：{metadata_path}")
 
     if args.metadata:
@@ -526,21 +586,22 @@ def run(args: argparse.Namespace) -> Path:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="解析抖音分享链接，保存 video_url 和视频元数据。")
+    parser.add_argument("input", nargs="?", help="抖音短链、分享页链接，或包含链接的整段分享文案")
     parser.add_argument("-url", default=None, help="抖音短链、分享页链接，或包含链接的整段分享文案")
     parser.add_argument("-o", "--output-dir", default="outputs", help="输出目录，默认 outputs")
+    parser.add_argument("--no-cover", dest="cover", action="store_false", help="不下载封面图，只在 JSON 中保留封面 URL")
     parser.add_argument("--download", action="store_true", help="额外下载视频文件到本地")
     parser.add_argument("--overwrite", action="store_true", help="覆盖已存在文件")
     parser.add_argument("--no-metadata", dest="metadata", action="store_false", help="不保存 JSON 元数据，只打印解析结果")
     parser.add_argument("--print-urls", action="store_true", help="打印全部候选视频地址")
-    parser.set_defaults(metadata=True)
+    parser.set_defaults(cover=True, metadata=True)
     return parser
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-
-    args.url = "4.12 复制打开抖音，看看【HIGUY官方旗舰店的作品】不是哥们 黑色肌理感短袖就是爽啊! # 夏季新款 ... https://v.douyin.com/fUxmwgzKZtM/ W@m.DH zGv:/ :7pm 04/28 "
+    args.url = args.url or args.input
     if not args.url:
         parser.error("请传入抖音短链、分享页链接，或包含链接的整段分享文案。")
     try:
