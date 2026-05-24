@@ -35,7 +35,6 @@ from .douyin_video_assets import (
     make_opener,
     parse_router_data,
     resolve_aweme_id,
-    safe_filename,
     save_metadata,
 )
 from .qwen_video_analysis import analyze_video, configure_logging, get_api_key, save_json
@@ -87,7 +86,7 @@ def resolve_and_save_assets(args: argparse.Namespace) -> dict[str, Any]:
         urls=urls,
     )
     title = metadata.get("title") or metadata.get("desc") or aweme_id
-    basename = safe_filename(f"{aweme_id}_{title}", f"douyin_{aweme_id}")
+    basename = aweme_id
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

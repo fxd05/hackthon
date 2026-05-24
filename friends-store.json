@@ -33,5 +33,12 @@
     "toUserId": "user-1779586326825",
     "status": "accepted",
     "createdAt": "2026-05-24T02:38:18Z"
+  },
+  {
+    "id": "fr-1779592054917-0038",
+    "fromUserId": "user-1779591602990",
+    "toUserId": "user-1779588040358",
+    "status": "accepted",
+    "createdAt": "2026-05-24T03:07:34Z"
   }
 ]
