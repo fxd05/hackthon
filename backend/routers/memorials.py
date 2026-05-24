@@ -218,25 +218,9 @@ def get_voice_comment(memorial_id: str, user: dict = CurrentUser):
 @router.post("/api/memorials/{memorial_id}/approve")
 async def approve_memorial(memorial_id: str, raw_request: Request, user: dict = CurrentUser) -> JSONResponse:
     rows = load_memorials()
-    content_type = raw_request.headers.get("content-type", "")
-    if "multipart/form-data" in content_type:
-        form = await raw_request.form()
-        payload = {
-            "status": form.get("status"),
-            "imperialComment": form.get("imperialComment"),
-            "voiceCommentBase64": None,
-            "voiceCommentMime": form.get("voiceCommentMime"),
-            "voiceCommentDurationMs": int(form.get("voiceCommentDurationMs") or 0),
-        }
-        audio = form.get("audio")
-        if audio is not None:
-            audio_bytes = await audio.read()
-            payload["voiceCommentBase64"] = base64.b64encode(audio_bytes).decode("utf-8")
-            payload["voiceCommentMime"] = getattr(audio, "content_type", None) or "audio/webm"
-            if not payload["voiceCommentDurationMs"]:
-                payload["voiceCommentDurationMs"] = int(form.get("recordSeconds") or 0) * 1000
-    else:
-        payload = await raw_request.json()
+    payload = await raw_request.json()
+    if not isinstance(payload, dict):
+        return JSONResponse(fail("请求体格式错误。"), status_code=400)
 
     request = ApproveMemorialRequest.model_validate(payload)
     for index, item in enumerate(rows):

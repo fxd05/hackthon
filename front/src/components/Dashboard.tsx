@@ -131,18 +131,29 @@ export default function Dashboard() {
     voice?: { blob: Blob; mimeType: string; durationMs: number }
   ) => {
     try {
-      const body = voice
-        ? (() => {
-            const formData = new FormData();
-            formData.append('status', status);
-            formData.append('imperialComment', comment);
-            formData.append('audio', voice.blob, 'imperial-voice.webm');
-            formData.append('voiceCommentMime', voice.mimeType);
-            formData.append('voiceCommentDurationMs', String(voice.durationMs));
-            formData.append('recordSeconds', String(Math.round(voice.durationMs / 1000)));
-            return formData;
-          })()
-        : JSON.stringify({ status, imperialComment: comment });
+      const body = await (async () => {
+        if (!voice) {
+          return JSON.stringify({ status, imperialComment: comment });
+        }
+
+        const voiceCommentBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = String(reader.result || '');
+            resolve(result);
+          };
+          reader.onerror = () => reject(new Error('语音转码失败。'));
+          reader.readAsDataURL(voice.blob);
+        });
+
+        return JSON.stringify({
+          status,
+          imperialComment: comment,
+          voiceCommentBase64,
+          voiceCommentMime: voice.mimeType,
+          voiceCommentDurationMs: voice.durationMs,
+        });
+      })();
       const response = await authFetch(`/api/memorials/${id}/approve`, {
         method: 'POST',
         body,

@@ -40,11 +40,15 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [recordError, setRecordError] = useState<string | null>(null);
-  const [playSource, setPlaySource] = useState<string | null>(null);
+  const [voiceSource, setVoiceSource] = useState<string | null>(null);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voicePlaying, setVoicePlaying] = useState(false);
   const [playLoading, setPlayLoading] = useState(false);
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const recordedChunksRef = useRef<BlobPart[]>([]);
   const recordTimerRef = useRef<number | null>(null);
   const recordStopRef = useRef<number | null>(null);
@@ -61,13 +65,19 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
       if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
       if (recordStopRef.current) window.clearTimeout(recordStopRef.current);
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-      if (playSource) URL.revokeObjectURL(playSource);
+      if (voiceSource) URL.revokeObjectURL(voiceSource);
     };
-  }, [playSource]);
+  }, [voiceSource]);
 
   useEffect(() => {
     if (memorial.status !== 'pending') {
-      setPlaySource(null);
+      if (voiceAudioRef.current) {
+        voiceAudioRef.current.pause();
+        voiceAudioRef.current.currentTime = 0;
+      }
+      setVoiceSource(null);
+      setVoicePlaying(false);
+      setVoiceError(null);
     }
   }, [memorial.id, memorial.status]);
 
@@ -126,21 +136,48 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
     }
   };
 
-  const handlePlayVoice = async () => {
-    if (playSource) {
-      setPlaySource(null);
-      return;
-    }
+  const loadVoiceSource = async () => {
+    if (voiceSource) return voiceSource;
+    setVoiceError(null);
+    setVoiceLoading(true);
     try {
-      setPlayLoading(true);
       const response = await authFetch(`/api/memorials/${memorial.id}/voice-comment`);
       if (!response.ok) {
-        setRecordError('未找到语音朱批。');
-        return;
+        throw new Error('未找到语音朱批。');
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      setPlaySource(url);
+      setVoiceSource(url);
+      return url;
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const handlePlayVoice = async () => {
+    try {
+      setPlayLoading(true);
+      const url = await loadVoiceSource();
+      if (!url) return;
+      const audio = voiceAudioRef.current;
+      if (!audio) {
+        throw new Error('语音播放器尚未准备好。');
+      }
+      if (voicePlaying) {
+        audio.pause();
+        audio.currentTime = 0;
+        setVoicePlaying(false);
+        return;
+      }
+      if (audio.src !== url) {
+        audio.src = url;
+        audio.load();
+      }
+      await audio.play();
+      setVoicePlaying(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '未能播放语音朱批。';
+      setVoiceError(message);
     } finally {
       setPlayLoading(false);
     }
@@ -356,11 +393,12 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
                     className="px-3 py-2 rounded-lg text-xs font-serif font-bold flex items-center gap-1.5 border bg-[#FCFAF5] text-[#6E6357] border-[#DCD3BE]"
                   >
                     <Play className="w-3.5 h-3.5" />
-                    {playLoading ? '载入中' : playSource ? '关闭回放' : '回放语音'}
+                    {playLoading || voiceLoading ? '载入中' : voicePlaying ? '暂停语音' : '播放存音'}
                   </button>
                 )}
               </div>
               {recordError && <p className="text-[10px] text-[#A93226] font-serif">{recordError}</p>}
+              {voiceError && <p className="text-[10px] text-[#A93226] font-serif">{voiceError}</p>}
               {memorial.imperialComment && (
                 <div className="p-3 bg-[#FCFAF5] rounded-lg border border-[#DCD3BE] space-y-2">
                   <div className="text-[10px] font-serif text-[#7C6647] font-bold">对方朱批</div>
@@ -371,14 +409,19 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
                       onClick={handlePlayVoice}
                       className="text-[10px] font-serif text-[#A93226] underline"
                     >
-                      {playSource ? '关闭语音回放' : '点此听语音朱批'}
+                      {voicePlaying ? '暂停语音回放' : '点此听语音朱批'}
                     </button>
                   )}
                 </div>
               )}
-              {playSource && (
-                <audio controls autoPlay src={playSource} className="w-full" />
-              )}
+              <audio
+                ref={voiceAudioRef}
+                preload="metadata"
+                onEnded={() => setVoicePlaying(false)}
+                onPause={() => setVoicePlaying(false)}
+                onPlay={() => setVoicePlaying(true)}
+                className="hidden"
+              />
             </div>
 
             {/* Approval status selectors */}

@@ -56,11 +56,28 @@
     "createdAt": "2026-05-24T02:23:34Z"
   },
   {
+<<<<<<< HEAD
     "id": "user-1779591602990",
     "username": "bbb",
     "passwordHash": "pbkdf2_sha256$120000$UrVkLYPcuUFvEjtBg43e1A==$J/R0QOrunuBVBjuq10DQhFreAxhG42jx/YLNAeizXFA=",
     "displayName": "abab",
     "avatarTitle": "1",
     "createdAt": "2026-05-24T03:00:03Z"
+=======
+    "id": "user-1779591422445",
+    "username": "ycb",
+    "passwordHash": "pbkdf2_sha256$120000$vf9/X5RXppv1W6n+V7Q9SQ==$jC8RhavtC2l+UmVgGRsqTFewBtKevcfZpjIZB5BQe3c=",
+    "displayName": "ycb",
+    "avatarTitle": "ycb",
+    "createdAt": "2026-05-24T02:57:02Z"
+  },
+  {
+    "id": "user-1779593101028",
+    "username": "Admin1",
+    "passwordHash": "pbkdf2_sha256$120000$J0F16SzT25kbId2PoZPUkw==$ZxGivJCMXFjNwY5fzwHSib2Ia0kbyP3nbdT+DxC6Soc=",
+    "displayName": "翰林学士",
+    "avatarTitle": "提督",
+    "createdAt": "2026-05-24T03:25:01Z"
+>>>>>>> fde33be (V0.7)
   }
 ]
