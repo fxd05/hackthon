@@ -360,13 +360,15 @@ def list_sent(user_id: str) -> list[dict[str, Any]]:
 
 def user_seed_memorials(user_id: str) -> list[dict[str, Any]]:
     base = datetime.now(UTC)
+    seed_templates = seed_memorials(base)
+    total = len(seed_templates)
     seeds = []
-    for index, seed in enumerate(seed_memorials(base), start=1):
+    for index, seed in enumerate(seed_templates, start=1):
         item = dict(seed)
         item["id"] = f"seed-{user_id}-{index}-{int(time.time() * 1000)}"
         item["toUserId"] = user_id
         item["fromUserId"] = None
-        item["createdTime"] = (base - timedelta(hours=5 - index)).isoformat()
+        item["createdTime"] = (base - timedelta(hours=total + 1 - index)).isoformat()
         item["senderReadAt"] = None
         item["voiceCommentPath"] = None
         item["voiceCommentMime"] = None

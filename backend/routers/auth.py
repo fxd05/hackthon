@@ -44,11 +44,12 @@ def register(request: RegisterRequest) -> JSONResponse:
     save_users(users)
 
     memorials = load_memorials()
-    memorials.extend(user_seed_memorials(user["id"]))
+    seeds = user_seed_memorials(user["id"])
+    memorials.extend(seeds)
     save_memorials(memorials)
 
     token = new_token(user["id"])
-    logger.info("user registered user_id=%s username=%s seeds=4", user["id"], username)
+    logger.info("user registered user_id=%s username=%s seeds=%s", user["id"], username, len(seeds))
     return JSONResponse(ok({"user": safe_user(user), "token": token}))
 
 
