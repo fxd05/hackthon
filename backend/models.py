@@ -67,6 +67,10 @@ class Memorial(BaseModel):
     toUserId: str | None = None
     fromUserDisplayName: str | None = None
     toUserDisplayName: str | None = None
+    senderReadAt: str | None = None
+    voiceCommentPath: str | None = None
+    voiceCommentMime: str | None = None
+    voiceCommentDurationMs: int | None = Field(default=None, ge=0)
     videoInfo: dict | None = None
 
 
@@ -107,6 +111,9 @@ class GenerateCommentRequest(BaseModel):
 class ApproveMemorialRequest(BaseModel):
     status: MemorialStatus
     imperialComment: str | None = None
+    voiceCommentBase64: str | None = None
+    voiceCommentMime: str | None = None
+    voiceCommentDurationMs: int | None = Field(default=None, ge=0)
 
 
 class UpdateMemorialRequest(BaseModel):

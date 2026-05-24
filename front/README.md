@@ -29,6 +29,8 @@ Vite 会把这些请求代理到后端：
 
 后端默认地址是 `http://127.0.0.1:8000`。
 
+如果要通过 Cloudflare Tunnel 对外访问，请先执行 `npm run build`，然后启动根目录的 `uvicorn app:app --reload --port 8000`，由后端直接托管 `front/dist`。
+
 ## 说明
 
 前端使用本地 token 作为登录态，存储键为 `imperial-token`。

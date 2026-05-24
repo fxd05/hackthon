@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scroll, Sparkles, Filter, Plus, RotateCcw, CheckCircle, Search, Users, LogOut, Send } from 'lucide-react';
+import { Scroll, Sparkles, Filter, Plus, RotateCcw, CheckCircle, Search, Users, LogOut, Send, CircleAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Memorial } from '../types';
 import { authFetch } from '../utils/api';
@@ -124,16 +124,37 @@ export default function Dashboard() {
     }
   };
 
-  const handleApproveMemorial = async (id: string, status: 'approved' | 'rejected' | 'held', comment: string) => {
+  const handleApproveMemorial = async (
+    id: string,
+    status: 'approved' | 'rejected' | 'held',
+    comment: string,
+    voice?: { blob: Blob; mimeType: string; durationMs: number }
+  ) => {
     try {
+      const body = voice
+        ? (() => {
+            const formData = new FormData();
+            formData.append('status', status);
+            formData.append('imperialComment', comment);
+            formData.append('audio', voice.blob, 'imperial-voice.webm');
+            formData.append('voiceCommentMime', voice.mimeType);
+            formData.append('voiceCommentDurationMs', String(voice.durationMs));
+            formData.append('recordSeconds', String(Math.round(voice.durationMs / 1000)));
+            return formData;
+          })()
+        : JSON.stringify({ status, imperialComment: comment });
       const response = await authFetch(`/api/memorials/${id}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ status, imperialComment: comment })
+        body,
       });
       const result = await response.json();
       if (result.success) {
         setMemorials(prev => prev.map(m => m.id === id ? result.data : m));
         setSelectedMemorial(result.data);
+        if (activeTab === 'sent') {
+          setSentMemorials(prev => prev.map(m => m.id === id ? result.data : m));
+        }
+        fetchSentMemorials();
       }
     } catch (err) {
       console.error("Failed to approve memorial:", err);
@@ -146,6 +167,7 @@ export default function Dashboard() {
   const diligenceIndex = totalDecrees > 0 ? Math.round((approvedCount / totalDecrees) * 100) : 100;
   const pendingMemorials = memorials.filter(m => m.status === 'pending');
   const approvedMemorials = memorials.filter(m => m.status === 'approved');
+  const unreadSentCount = sentMemorials.filter(m => m.imperialComment && !m.senderReadAt).length;
 
   const getEmperorRankStr = (index: number) => {
     if (totalDecrees === 0) return "清静无为 · 万民升平安康";
@@ -312,6 +334,14 @@ export default function Dashboard() {
               className={`py-2.5 rounded-lg text-xs font-serif font-bold tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTab === 'sent' ? 'bg-[#A93226] text-white shadow-sm' : 'text-[#6E6357] hover:text-[#2F2722] hover:bg-[#FCFAF5]'}`}
             >
               <Send className="w-3.5 h-3.5" /> 已发折件
+              <span className="text-[10px] text-white/85 bg-white/15 px-1.5 py-0.5 rounded-full">
+                {sentMemorials.length}
+              </span>
+              {unreadSentCount > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-[#A93226] text-white text-[10px] font-black">
+                  {unreadSentCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab('briefing')}
@@ -409,7 +439,19 @@ export default function Dashboard() {
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.97 }}
                           whileHover={{ y: -5, scale: 1.01, transition: { duration: 0.15 } }}
-                          onClick={() => (!isSentTab ? setSelectedMemorial(m) : undefined)}
+                          onClick={() => {
+                            setSelectedMemorial(m);
+                            if (isSentTab && m.imperialComment && !m.senderReadAt) {
+                              authFetch(`/api/memorials/${m.id}/mark-read`, { method: 'POST' })
+                                .then(async (res) => {
+                                  const result = await res.json();
+                                  if (result.success) {
+                                    setSentMemorials(prev => prev.map(item => item.id === m.id ? result.data : item));
+                                  }
+                                })
+                                .catch(() => {});
+                            }
+                          }}
                           className={`${isSentTab ? '' : 'cursor-pointer'} overflow-hidden border border-t-2 border-b-2 rounded-xl flex flex-col justify-between min-h-[17.5rem] h-auto transition-all relative w-full max-w-[26rem] mx-auto ${
                             isPending
                               ? 'bg-gradient-to-br from-[#FCFAF5] to-[#FDFBF7] border-t-[#A93226] border-b-[#C2B095]/40 border-x-[#C2B095]/60 shadow-[0_4px_12px_rgba(194,176,149,0.1)] hover:shadow-[0_12px_24px_rgba(169,50,38,0.12)]'
@@ -476,9 +518,9 @@ export default function Dashboard() {
                               </span>
                             )}
                             {isSentTab && m.imperialComment && (
-                              <span className="font-serif text-[9.5px] flex items-center gap-1 bg-[#EEF6F2] px-2 py-0.5 rounded-full border border-[#2E5C50]/20 text-[#2E5C50] font-bold shadow-2xs">
-                                <CheckCircle className="w-3.5 h-3.5 inline" />
-                                对方已批
+                              <span className={`font-serif text-[9.5px] flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold shadow-2xs ${m.senderReadAt ? 'bg-[#EEF6F2] border-[#2E5C50]/20 text-[#2E5C50]' : 'bg-[#FFF4E8] border-[#A93226]/20 text-[#A93226]'}`}>
+                                {m.senderReadAt ? <CheckCircle className="w-3.5 h-3.5 inline" /> : <CircleAlert className="w-3.5 h-3.5 inline" />}
+                                {m.senderReadAt ? '对方已读' : '对方已批'}
                               </span>
                             )}
                           </div>

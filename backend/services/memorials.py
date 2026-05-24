@@ -13,6 +13,7 @@ from backend.config import (
     DEFAULT_SENDER,
     DEFAULT_SEVERITY_LEVEL,
     MINISTRIES,
+    VOICE_COMMENT_DIR,
     STORE_PATH,
     USERS_STORE_PATH,
 )
@@ -78,6 +79,10 @@ def normalize_memorial(item: dict[str, Any]) -> dict[str, Any]:
     item.setdefault("entertainmentRatio", 70)
     item.setdefault("severityLevel", DEFAULT_SEVERITY_LEVEL)
     item.setdefault("createdTime", now_iso())
+    item.setdefault("senderReadAt", None)
+    item.setdefault("voiceCommentPath", None)
+    item.setdefault("voiceCommentMime", None)
+    item.setdefault("voiceCommentDurationMs", None)
     return Memorial.model_validate(item).model_dump(exclude_none=True)
 
 
@@ -182,6 +187,10 @@ def create_from_analysis(
         "approvedTime": created_at if status == "approved" else None,
         "fromUserId": from_user_id,
         "toUserId": to_user_id,
+        "senderReadAt": None,
+        "voiceCommentPath": None,
+        "voiceCommentMime": None,
+        "voiceCommentDurationMs": None,
         "videoInfo": video_info,
     }
     return normalize_memorial(item)
@@ -358,5 +367,24 @@ def user_seed_memorials(user_id: str) -> list[dict[str, Any]]:
         item["toUserId"] = user_id
         item["fromUserId"] = None
         item["createdTime"] = (base - timedelta(hours=5 - index)).isoformat()
+        item["senderReadAt"] = None
+        item["voiceCommentPath"] = None
+        item["voiceCommentMime"] = None
+        item["voiceCommentDurationMs"] = None
         seeds.append(item)
     return seeds
+
+
+def save_voice_comment(memorial_id: str, content: bytes, mime_type: str | None) -> str:
+    VOICE_COMMENT_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = "webm"
+    if mime_type:
+        if "wav" in mime_type:
+            suffix = "wav"
+        elif "ogg" in mime_type:
+            suffix = "ogg"
+        elif "mp4" in mime_type or "m4a" in mime_type:
+            suffix = "m4a"
+    path = VOICE_COMMENT_DIR / f"{memorial_id}-{int(time.time() * 1000)}.{suffix}"
+    path.write_bytes(content)
+    return str(path)

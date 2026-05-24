@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from backend.responses import fail
 from backend.routers import auth, friends, memorials
@@ -16,6 +17,11 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+FRONT_DIST_DIR = BASE_DIR / "front" / "dist"
+FRONT_INDEX_PATH = FRONT_DIST_DIR / "index.html"
+FRONT_DIST_RESOLVED = FRONT_DIST_DIR.resolve()
 
 
 def create_app() -> FastAPI:
@@ -62,9 +68,39 @@ def create_app() -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    def serve_frontend(path: str = ""):
+        if not FRONT_INDEX_PATH.exists():
+            logger.warning("frontend build missing at %s", FRONT_INDEX_PATH)
+            return PlainTextResponse(
+                "Frontend build not found. Run `cd front && npm install && npm run build`.",
+                status_code=503,
+            )
+
+        if path:
+            requested = (FRONT_DIST_DIR / path).resolve()
+            if requested.is_file() and (
+                requested == FRONT_DIST_RESOLVED or FRONT_DIST_RESOLVED in requested.parents
+            ):
+                return FileResponse(requested)
+
+        return FileResponse(FRONT_INDEX_PATH)
+
     app.include_router(auth.router)
     app.include_router(friends.router)
     app.include_router(memorials.router)
+
+    @app.get("/", include_in_schema=False)
+    def frontend_root():
+        return serve_frontend()
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def frontend_spa(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        if full_path in {"docs", "redoc", "openapi.json"}:
+            raise HTTPException(status_code=404, detail="Not Found")
+        return serve_frontend(full_path)
+
     return app
 
 

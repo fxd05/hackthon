@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Scroll, Check, AlertTriangle, Play, Sparkles, PencilLine, Trash2, X, Trophy } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Scroll, Check, AlertTriangle, Play, Mic, Square, Trash2, X, Trophy, PencilLine } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Memorial } from '../types';
 import { authFetch } from '../utils/api';
@@ -22,20 +22,33 @@ const replaceOldTitles = (text: string) => {
 interface MemorialDetailProps {
   memorial: Memorial;
   onClose: () => void;
-  onApprove: (id: string, status: 'approved' | 'rejected' | 'held', comment: string) => void;
+  onApprove: (
+    id: string,
+    status: 'approved' | 'rejected' | 'held',
+    comment: string,
+    voice?: { blob: Blob; mimeType: string; durationMs: number }
+  ) => void;
   onDelete: (id: string) => void;
 }
 
 export default function MemorialDetail({ memorial, onClose, onApprove, onDelete }: MemorialDetailProps) {
   const [stampActive, setStampActive] = useState(false);
-  const [drafting, setDrafting] = useState(false);
   const [commentText, setCommentText] = useState(memorial.imperialComment || '');
-  const [selectedTone, setSelectedTone] = useState<'pleased' | 'angry' | 'laugh' | 'reward' | 'held'>('pleased');
   const [currentStatus, setCurrentStatus] = useState<'approved' | 'rejected' | 'held'>(
     (memorial.status === 'pending' ? 'approved' : memorial.status) as any
   );
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const [playSource, setPlaySource] = useState<string | null>(null);
+  const [playLoading, setPlayLoading] = useState(false);
+  const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const recordTimerRef = useRef<number | null>(null);
+  const recordStopRef = useRef<number | null>(null);
   
-  // Update local comment when memorial changes
   useEffect(() => {
     setCommentText(memorial.imperialComment || '');
     if (memorial.status !== 'pending') {
@@ -43,47 +56,112 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
     }
   }, [memorial]);
 
-  // Request AI Draft comment from server
-  const handleAiDraft = async (tone: typeof selectedTone) => {
-    setDrafting(true);
-    setSelectedTone(tone);
-    try {
-      const response = await authFetch('/api/generate-comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: memorial.title,
-          category: memorial.category,
-          sender: memorial.sender,
-          tone: tone
-        })
-      });
-      const result = await response.json();
-      if (result.success) {
-        setCommentText(result.comment);
-        // Map tone to status
-        if (tone === 'angry') {
-          setCurrentStatus('rejected'); // 驳回
-        } else if (tone === 'held') {
-          setCurrentStatus('held'); // 留中
-        } else {
-          setCurrentStatus('approved'); // 准奏
-        }
-      }
-    } catch (err) {
-      console.error("Failed to generate AI commentDraft:", err);
-    } finally {
-      setDrafting(false);
+  useEffect(() => {
+    return () => {
+      if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+      if (recordStopRef.current) window.clearTimeout(recordStopRef.current);
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (playSource) URL.revokeObjectURL(playSource);
+    };
+  }, [playSource]);
+
+  useEffect(() => {
+    if (memorial.status !== 'pending') {
+      setPlaySource(null);
+    }
+  }, [memorial.id, memorial.status]);
+
+  const stopRecording = async () => {
+    mediaRecorderRef.current?.stop();
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    setIsRecording(false);
+    if (recordTimerRef.current) {
+      window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    if (recordStopRef.current) {
+      window.clearTimeout(recordStopRef.current);
+      recordStopRef.current = null;
     }
   };
 
-  // Stamp seal action
+  const startRecording = async () => {
+    setRecordError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setRecordError('当前浏览器不支持录音。');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      setRecordSeconds(0);
+      setIsRecording(true);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        setRecordingBlob(blob);
+      };
+
+      recorder.start();
+      recordTimerRef.current = window.setInterval(() => {
+        setRecordSeconds((prev) => {
+          if (prev >= 29) {
+            stopRecording();
+            return 30;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+      recordStopRef.current = window.setTimeout(() => stopRecording(), 30000);
+    } catch {
+      setRecordError('未能获取麦克风权限。');
+    }
+  };
+
+  const handlePlayVoice = async () => {
+    if (playSource) {
+      setPlaySource(null);
+      return;
+    }
+    try {
+      setPlayLoading(true);
+      const response = await authFetch(`/api/memorials/${memorial.id}/voice-comment`);
+      if (!response.ok) {
+        setRecordError('未找到语音朱批。');
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setPlaySource(url);
+    } finally {
+      setPlayLoading(false);
+    }
+  };
+
+  const handleSubmitApproval = async () => {
+    onApprove(
+      memorial.id,
+      currentStatus,
+      commentText || '朕已批示，钦此！',
+      recordingBlob
+        ? { blob: recordingBlob, mimeType: recordingBlob.type || 'audio/webm', durationMs: recordSeconds * 1000 }
+        : undefined
+    );
+    setRecordingBlob(null);
+  };
+
   const handleApplySeal = () => {
     setStampActive(true);
-    // Short stagger before saving for a satisfying vibration/stamping simulation
     setTimeout(() => {
-      onApprove(memorial.id, currentStatus, commentText || "朕已批示，钦此！");
-      setStampActive(false);
+      handleSubmitApproval().finally(() => setStampActive(false));
     }, 1100);
   };
 
@@ -103,13 +181,13 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
   };
 
   return (
-    <div id="memorial-detail-overlay" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1A17]/80 backdrop-blur-sm overflow-y-auto">
+    <div id="memorial-detail-overlay" className="fixed inset-0 z-50 flex items-stretch md:items-center justify-center p-2 md:p-4 bg-[#1E1A17]/80 backdrop-blur-sm overflow-hidden">
       
       {/* Traditional Palace Styled Scroll Panel Dialog Frame */}
-      <div className="relative w-full max-w-4xl bg-[#FAF6ED] border-4 border-double border-[#A93226]/60 rounded-2xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 max-h-[90vh]">
+      <div className="relative w-full max-w-4xl h-[calc(100dvh-1rem)] md:h-auto md:max-h-[90vh] bg-[#FAF6ED] border-4 border-double border-[#A93226]/60 rounded-2xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 grid-rows-[minmax(0,68fr)_minmax(0,32fr)] md:grid-rows-none">
         
         {/* Left Side: Traditional Rice-parchment Scroll */}
-        <div className="col-span-1 md:col-span-7 bg-[#FCF9F2] relative p-6 md:p-8 flex flex-col min-h-0 overflow-hidden h-[50vh] md:h-[90vh] border-b md:border-b-0 md:border-r border-[#DCD3BE]">
+        <div className="col-span-1 md:col-span-7 bg-[#FCF9F2] relative p-5 md:p-8 flex flex-col min-h-0 overflow-y-auto h-full md:h-[90vh] border-b md:border-b-0 md:border-r border-[#DCD3BE]">
           
           {/* Scroll Wooden Slats Decoration on Left and Right borders */}
           <div className="absolute top-0 bottom-0 left-0 w-3 bg-gradient-to-r from-[#87251B] via-[#E4D5B9] to-[#87251B] border-r border-[#87251B]/20 shadow-md"></div>
@@ -215,11 +293,12 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
         </div>
 
         {/* Right Side: Royal Desk Mahogany Styled Panel for Actions */}
-        <div className="col-span-1 md:col-span-5 bg-[#F2ECE0] p-6 md:p-8 flex flex-col justify-between border-t md:border-t-0 md:border-l border-[#DCD3BE] max-h-[90vh] md:max-h-none overflow-y-auto">
+        <div className="col-span-1 md:col-span-5 bg-[#F2ECE0] relative p-4 md:p-8 flex flex-col justify-start md:justify-between border-t md:border-t-0 md:border-l border-[#DCD3BE] min-h-0 h-full md:h-[90vh] overflow-y-auto">
+          <div className="absolute -top-4 left-4 right-4 h-8 md:hidden pointer-events-none bg-gradient-to-b from-[#FCF9F2] via-[#F6EEE0]/80 to-[#F2ECE0]/95 blur-[1px]"></div>
           
-          <div className="space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b border-[#D5C6AC]/60">
-              <h2 className="font-serif text-base font-extrabold tracking-wide text-[#5C2318] flex items-center gap-1.5">
+          <div className="space-y-3 md:space-y-5 relative z-10">
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#D5C6AC]/60">
+              <h2 className="font-serif text-sm md:text-base font-extrabold tracking-wide text-[#5C2318] flex items-center gap-1.5">
                 <PencilLine className="w-5 h-5 text-[#A93226]" />
                 御笔裁夺 · 钤印朱批
               </h2>
@@ -233,73 +312,73 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
               </button>
             </div>
 
-            {/* AI assisted tones panel configured as Chinese lacquer seals */}
-            <div className="space-y-3">
-              <label className="block text-xs font-serif text-[#6E6357] font-bold">
-                1. 命大秘书代撰拟定评批 (选择圣眷态度):
-              </label>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  id="tone-pleased-btn"
-                  type="button"
-                  onClick={() => handleAiDraft('pleased')}
-                  disabled={drafting}
-                  className={`p-2 rounded-lg text-xs text-left font-serif border transition-all flex items-center gap-1.5 ${selectedTone === 'pleased' ? 'bg-[#A93226] border-[#A93226] text-white font-bold shadow-sm' : 'bg-[#FCFAF5] border-[#DCD3BE] text-[#6E6357] hover:bg-white hover:text-black'}`}
-                >
-                  😌 龙颜甚悦 (准)
-                </button>
-                <button
-                  id="tone-laugh-btn"
-                  type="button"
-                  onClick={() => handleAiDraft('laugh')}
-                  disabled={drafting}
-                  className={`p-2 rounded-lg text-xs text-left font-serif border transition-all flex items-center gap-1.5 ${selectedTone === 'laugh' ? 'bg-[#A93226] border-[#A93226] text-white font-bold shadow-sm' : 'bg-[#FCFAF5] border-[#DCD3BE] text-[#6E6357] hover:bg-white hover:text-black'}`}
-                >
-                  😂 拂袖狂笑 (准)
-                </button>
-                <button
-                  id="tone-angry-btn"
-                  type="button"
-                  onClick={() => handleAiDraft('angry')}
-                  disabled={drafting}
-                  className={`p-2 rounded-lg text-xs text-left font-serif border transition-all flex items-center gap-1.5 ${selectedTone === 'angry' ? 'bg-[#87251B] border-[#87251B] text-white font-bold shadow-sm' : 'bg-[#FCFAF5] border-[#DCD3BE] text-[#6E6357] hover:bg-white hover:text-black'}`}
-                >
-                  😡 圣上拍案 (驳)
-                </button>
-                <button
-                  id="tone-reward-btn"
-                  type="button"
-                  onClick={() => handleAiDraft('reward')}
-                  disabled={drafting}
-                  className={`p-2 rounded-lg text-xs text-left font-serif border transition-all flex items-center gap-1.5 ${selectedTone === 'reward' ? 'bg-[#A93226] border-[#A93226] text-white font-bold shadow-sm' : 'bg-[#FCFAF5] border-[#DCD3BE] text-[#6E6357] hover:bg-white hover:text-black'}`}
-                >
-                  🐟 赏赐猫干 (赏)
-                </button>
-              </div>
-            </div>
-
-            {/* Custom comment edit box */}
+            {/* Comment editor */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-serif text-[#6E6357] font-bold">
-                  2. 皇帝朱批亲笔手书诏书:
+                  1. 皇帝朱批亲笔手书诏书:
                 </label>
-                {drafting && (
-                  <span className="text-[10px] text-[#A93226] font-serif animate-pulse flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 animate-spin" /> 学士代拟中...
-                  </span>
-                )}
               </div>
 
               <textarea
                 id="imperial-comment-textarea"
-                rows={5}
+                rows={4}
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
-                placeholder="在此批阅折件起草意见。亦可在上方命大学士拟旨，再在此微调朱批内容..."
+                placeholder="请亲笔输入朱批内容，或改用下方语音输入。"
                 className="w-full px-3 py-2 text-sm bg-white border border-[#DCD3BE] rounded-lg text-[#2F2722] focus:outline-none focus:border-[#A93226] focus:ring-1 focus:ring-[#A93226]/30 font-serif leading-relaxed"
               />
+            </div>
+
+            {/* Voice comment */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-serif text-[#6E6357] font-bold">
+                  2. 语音朱批
+                </label>
+                <span className="text-[10px] text-[#7C6647] font-serif">
+                  最长 30 秒
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`px-3 py-2 rounded-lg text-xs font-serif font-bold flex items-center gap-1.5 border ${isRecording ? 'bg-[#87251B] text-white border-[#87251B]' : 'bg-[#FCFAF5] text-[#6E6357] border-[#DCD3BE]'}`}
+                >
+                  {isRecording ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                  {isRecording ? `停止 ${recordSeconds}s` : '开始录音'}
+                </button>
+                {memorial.voiceCommentPath && (
+                  <button
+                    type="button"
+                    onClick={handlePlayVoice}
+                    className="px-3 py-2 rounded-lg text-xs font-serif font-bold flex items-center gap-1.5 border bg-[#FCFAF5] text-[#6E6357] border-[#DCD3BE]"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    {playLoading ? '载入中' : playSource ? '关闭回放' : '回放语音'}
+                  </button>
+                )}
+              </div>
+              {recordError && <p className="text-[10px] text-[#A93226] font-serif">{recordError}</p>}
+              {memorial.imperialComment && (
+                <div className="p-3 bg-[#FCFAF5] rounded-lg border border-[#DCD3BE] space-y-2">
+                  <div className="text-[10px] font-serif text-[#7C6647] font-bold">对方朱批</div>
+                  <p className="text-xs font-serif text-[#2F2722] whitespace-pre-wrap">{memorial.imperialComment}</p>
+                  {memorial.voiceCommentPath && (
+                    <button
+                      type="button"
+                      onClick={handlePlayVoice}
+                      className="text-[10px] font-serif text-[#A93226] underline"
+                    >
+                      {playSource ? '关闭语音回放' : '点此听语音朱批'}
+                    </button>
+                  )}
+                </div>
+              )}
+              {playSource && (
+                <audio controls autoPlay src={playSource} className="w-full" />
+              )}
             </div>
 
             {/* Approval status selectors */}
@@ -328,11 +407,11 @@ export default function MemorialDetail({ memorial, onClose, onApprove, onDelete 
           </div>
 
           {/* BRIGHT SEaL ACTION COMPONENT STAMP */}
-          <div className="pt-6 border-t border-[#D5C6AC]/60 mt-6 space-y-3">
+          <div className="pt-4 border-t border-[#D5C6AC]/60 mt-4 space-y-3 relative z-10">
             <button
               id="stamp-seal-action-btn"
               onClick={handleApplySeal}
-              disabled={stampActive || drafting}
+              disabled={stampActive || isRecording}
               className={`w-full py-3.5 px-4 font-serif text-sm font-black tracking-widest rounded-xl hover:brightness-110 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-1.5 border-b-4 border-[#782017] ${stampActive ? 'bg-[#87251B] text-white scale-[0.99]' : 'bg-[#A93226] text-white shadow-md'}`}
             >
               <Trophy className="w-4 h-4 text-amber-200" />

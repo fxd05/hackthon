@@ -2,3 +2,4 @@ dashscope
 fastapi
 python-dotenv
 uvicorn[standard]
+python-multipart

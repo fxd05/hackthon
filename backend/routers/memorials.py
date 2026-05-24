@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+import base64
+from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from backend.config import MINISTRIES
 from backend.models import (
@@ -27,6 +29,7 @@ from backend.services.memorials import (
     persist_new_memorial,
     process_video_url,
     save_memorials,
+    save_voice_comment,
     sender_for_user,
     user_seed_memorials,
 )
@@ -181,48 +184,73 @@ def create_analyzed(request: CreateAnalyzedMemorialRequest, user: dict = Current
 
 
 @router.post("/api/generate-comment")
-def generate_comment(request: GenerateCommentRequest, user: dict = CurrentUser) -> JSONResponse:
-    title = request.title.strip()
-    if not title:
-        return JSONResponse(fail("折子信息不足，无法批文。"), status_code=400)
+def generate_comment(_: GenerateCommentRequest, user: dict = CurrentUser) -> JSONResponse:
+    return JSONResponse(fail("已禁用 AI 朱批，请直接手写或语音输入。"), status_code=410)
 
-    tone_description = {
-        "pleased": "龙颜大悦，十分惊喜，觉得此文是国之祥瑞，决定同意",
-        "angry": "勃然大怒，龙颜震怒，觉得荒谬作死，严厉弹劾",
-        "laugh": "笑不活了，龙吟哈哈大笑，表示生平未见此等离谱人才",
-        "reward": "龙心大快，准奏起行，并决定给拍摄作者大肆打赏",
-        "held": "留中不发，持怀疑保留态度",
-    }
-    prompt = f"""你现在是至高无上的'大华恶搞朝代'当朝极幽默极毒舌也极接地气的万岁爷（皇帝陛下）。你要对大臣刚刚呈递来的奏章做出"御笔朱批（批阅评语）"！
 
-呈递的奏折背景：
-- 标题: "{title}"
-- 呈递大臣: "{request.sender or ''}"
-- 部门: "{request.category or ''}"
+@router.post("/api/memorials/{memorial_id}/mark-read")
+def mark_memorial_read(memorial_id: str, user: dict = CurrentUser) -> JSONResponse:
+    rows = load_memorials()
+    for index, item in enumerate(rows):
+        if item.get("id") != memorial_id:
+            continue
+        if item.get("fromUserId") != user["id"]:
+            return JSONResponse(fail("此折不是你发出的。"), status_code=403)
+        item["senderReadAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        rows[index] = normalize_memorial(item)
+        save_memorials(rows)
+        return JSONResponse(ok(rows[index]))
+    return JSONResponse(fail("未找到对应奏章。"), status_code=404)
 
-万岁爷今天此时的情绪状态（批奏语气）: "{tone_description.get(request.tone or '', '龙颜甚慰')}"
 
-要求：
-1. 必须使用古风皇家语气，以"朕"自称。
-2. 语言必须既好笑有梗，又有一种封建帝王的无厘头威严。
-3. 篇幅80至130字。
-4. 结语要像真正的圣旨批词，比如"钦此！"
-
-直接输出陛下所写的批语，不需要任何多余的前缀和Markdown。"""
-    comment = call_text_model(prompt, task="comment") or fallback_comment(title, request.tone)
-    source = "ai" if comment and not comment.startswith("【御笔亲批】") else "mock"
-    logger.info("comment generated user_id=%s title=%r tone=%s source=%s", user["id"], title, request.tone, source)
-    return JSONResponse({"success": True, "source": source, "comment": comment})
+@router.get("/api/memorials/{memorial_id}/voice-comment")
+def get_voice_comment(memorial_id: str, user: dict = CurrentUser):
+    rows = load_memorials()
+    target = next((item for item in rows if item.get("id") == memorial_id), None)
+    if not target or not target.get("voiceCommentPath"):
+        return JSONResponse(fail("未找到语音朱批。"), status_code=404)
+    path = Path(str(target["voiceCommentPath"]))
+    if not path.exists():
+        return JSONResponse(fail("语音文件已失效。"), status_code=404)
+    return FileResponse(path, media_type=str(target.get("voiceCommentMime") or "audio/webm"))
 
 
 @router.post("/api/memorials/{memorial_id}/approve")
-def approve_memorial(memorial_id: str, request: ApproveMemorialRequest, user: dict = CurrentUser) -> JSONResponse:
+async def approve_memorial(memorial_id: str, raw_request: Request, user: dict = CurrentUser) -> JSONResponse:
     rows = load_memorials()
+    content_type = raw_request.headers.get("content-type", "")
+    if "multipart/form-data" in content_type:
+        form = await raw_request.form()
+        payload = {
+            "status": form.get("status"),
+            "imperialComment": form.get("imperialComment"),
+            "voiceCommentBase64": None,
+            "voiceCommentMime": form.get("voiceCommentMime"),
+            "voiceCommentDurationMs": int(form.get("voiceCommentDurationMs") or 0),
+        }
+        audio = form.get("audio")
+        if audio is not None:
+            audio_bytes = await audio.read()
+            payload["voiceCommentBase64"] = base64.b64encode(audio_bytes).decode("utf-8")
+            payload["voiceCommentMime"] = getattr(audio, "content_type", None) or "audio/webm"
+            if not payload["voiceCommentDurationMs"]:
+                payload["voiceCommentDurationMs"] = int(form.get("recordSeconds") or 0) * 1000
+    else:
+        payload = await raw_request.json()
+
+    request = ApproveMemorialRequest.model_validate(payload)
     for index, item in enumerate(rows):
         if item.get("id") == memorial_id:
+            if request.voiceCommentBase64:
+                audio_bytes = base64.b64decode(request.voiceCommentBase64.split(",", 1)[-1])
+                voice_path = save_voice_comment(memorial_id, audio_bytes, request.voiceCommentMime or "audio/webm")
+                item["voiceCommentPath"] = voice_path
+                item["voiceCommentMime"] = request.voiceCommentMime or "audio/webm"
+                item["voiceCommentDurationMs"] = request.voiceCommentDurationMs
             item["status"] = request.status
             item["imperialComment"] = request.imperialComment or "朕已阅，退下。"
             item["approvedTime"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            item["senderReadAt"] = None
             rows[index] = normalize_memorial(item)
             save_memorials(rows)
             logger.info("memorial approved user_id=%s memorial_id=%s status=%s", user["id"], memorial_id, request.status)

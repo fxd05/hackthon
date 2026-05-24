@@ -33,6 +33,11 @@ export interface Memorial {
   fromUserId?: string;
   toUserId?: string;
   fromUserDisplayName?: string;
+  toUserDisplayName?: string;
+  senderReadAt?: string;
+  voiceCommentPath?: string;
+  voiceCommentMime?: string;
+  voiceCommentDurationMs?: number;
 }
 
 export interface DailyBriefing {

@@ -5,5 +5,33 @@
     "toUserId": "user-1779556911921",
     "status": "accepted",
     "createdAt": "2026-05-23T18:03:04Z"
+  },
+  {
+    "id": "fr-1779586488126-94d6",
+    "fromUserId": "user-1779586426161",
+    "toUserId": "user-1779586326825",
+    "status": "accepted",
+    "createdAt": "2026-05-24T01:34:48Z"
+  },
+  {
+    "id": "fr-1779589464974-308f",
+    "fromUserId": "user-1779589414066",
+    "toUserId": "user-1779588040358",
+    "status": "accepted",
+    "createdAt": "2026-05-24T02:24:24Z"
+  },
+  {
+    "id": "fr-1779590053456-2d2f",
+    "fromUserId": "user-1779588040358",
+    "toUserId": "user-1779586326825",
+    "status": "accepted",
+    "createdAt": "2026-05-24T02:34:13Z"
+  },
+  {
+    "id": "fr-1779590298960-3630",
+    "fromUserId": "user-1779589414066",
+    "toUserId": "user-1779586326825",
+    "status": "accepted",
+    "createdAt": "2026-05-24T02:38:18Z"
   }
 ]

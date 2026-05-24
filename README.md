@@ -14,21 +14,32 @@
 
 ## 运行方式
 
-### 后端
+### 本地或 Cloudflare Tunnel
+
+先构建前端：
+
+```bash
+cd front
+npm install
+npm run build
+```
+
+再启动后端：
 
 ```bash
 uvicorn app:app --reload --port 8000
 ```
 
-### 前端
+现在后端会直接托管前端静态文件，外网访问只需要把 Cloudflare Tunnel 指向 `http://127.0.0.1:8000`。
+
+开发时如果还想单独跑前端：
 
 ```bash
 cd front
-npm install
 npm run dev
 ```
 
-前端默认运行在 `http://localhost:3000`，并把 `/api` 和 `/health` 代理到 `http://127.0.0.1:8000`。
+前端开发地址默认是 `http://localhost:3000`，并把 `/api` 和 `/health` 代理到 `http://127.0.0.1:8000`。
 
 ## 主要功能
 
